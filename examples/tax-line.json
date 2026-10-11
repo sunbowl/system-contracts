@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "name": "tax-line",
+  "status": "confirmed",
+  "why": "The tax line on an estimate is a statement to a tax authority as well as to the customer. A wrong figure is not a bug report, it is a filing problem, and it is not ours to get wrong quietly.",
+  "owner": "billing",
+  "governs": {
+    "paths": ["src/tax/**"],
+    "entrypoints": ["attachTaxLine"]
+  },
+  "protected": [
+    {
+      "field": "quote.taxCents",
+      "locator": "src/tax/types.ts",
+      "type": "money",
+      "class": "deterministic",
+      "assertOn": "presence"
+    }
+  ],
+  "tolerant": [],
+  "guardrails": [
+    {
+      "name": "tax-response-shape",
+      "symbol": "assertTaxResponse",
+      "file": "src/tax/client.ts",
+      "mustExist": true,
+      "asserts": "Every response from the tax service is shape-checked before its figure is used, so a vendor-side change surfaces here instead of on an estimate."
+    }
+  ],
+  "externalBoundary": [
+    {
+      "field": "quote.taxCents",
+      "kind": "service",
+      "verifiable": false,
+      "describes": "The figure is computed by a separate tax service and this repo only forwards it. No local check can verify the value; a change here can only be shown not to alter the request we send or the response we accept.",
+      "compensating": "A contract test runs against the tax service's sandbox on a schedule, outside this repo's CI. If that test has not passed in 7 days, treat this field as unverified."
+    }
+  ],
+  "policy": {
+    "autoApply": "never",
+    "onDriftUnresolved": "blockProject"
+  },
+  "confirmedBy": "billing",
+  "confirmedAt": "2025-10-11"
+}

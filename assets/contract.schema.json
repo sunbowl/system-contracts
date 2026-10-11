@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sunbowl/system-contracts/assets/contract.schema.json",
+  "title": "System contract",
+  "description": "A machine-checkable statement that a particular output must not change, and what it costs if it does. The authority is scripts/contracts.sh validate, which also checks that the protected fields still exist in the code — something no schema can do.",
+  "type": "object",
+  "required": ["schemaVersion", "name", "status", "why", "governs", "policy"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "description": "Stable identifier; should match the filename." },
+    "status": {
+      "enum": ["confirmed", "proposed"],
+      "description": "A proposed contract grants no auto-apply permission and must pair with policy.autoApply = never."
+    },
+    "why": {
+      "type": "string",
+      "minLength": 25,
+      "description": "The business consequence of breaking this, in plain language. Mandatory: a contract without a stated consequence is a guess, and nobody can review a guess."
+    },
+    "owner": { "type": "string" },
+    "governs": {
+      "type": "object",
+      "required": ["paths"],
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Repo-relative globs. * within a segment, ** across segments, **/ zero or more directories."
+        },
+        "entrypoints": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "protected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "class"],
+        "additionalProperties": true,
+        "properties": {
+          "field": { "type": "string", "description": "Dotted path as the consumer sees it." },
+          "locator": { "type": "string", "description": "File where the field is declared; the drift check greps it." },
+          "class": {
+            "enum": ["deterministic", "bounded", "prose"],
+            "description": "Selects the assertion: exact equality / band plus mean drift over N samples / reported but never failing."
+          },
+          "type": { "enum": ["money", "quantity", "identifier", "shape", "enum", "text"] },
+          "assertOn": {
+            "enum": ["value", "shape", "presence"],
+            "default": "value",
+            "description": "shape is for a field whose value legitimately varies every call but whose format is parsed elsewhere."
+          },
+          "shape": { "type": "string", "description": "Required when assertOn is shape. A regex or named format." },
+          "tolerance": {
+            "type": "object",
+            "description": "Required when class is bounded; forbidden when class is deterministic.",
+            "additionalProperties": false,
+            "properties": {
+              "samples": { "type": "integer", "minimum": 1 },
+              "band": {
+                "type": "object",
+                "properties": { "min": { "type": ["number", "null"] }, "max": { "type": ["number", "null"] } },
+                "additionalProperties": false
+              },
+              "bandSource": { "type": "string", "description": "The name of a guardrail that defines the band in code. Preferred over restating it here." },
+              "meanDriftPct": { "type": "number", "minimum": 0, "description": "Catches a systematic shift that stays inside the band." }
+            }
+          },
+          "_note": { "type": "string" }
+        }
+      }
+    },
+    "tolerant": {
+      "type": "array",
+      "description": "Fields explicitly allowed to drift, so nobody has to guess.",
+      "items": {
+        "type": "object",
+        "required": ["field", "class"],
+        "additionalProperties": false,
+        "properties": {
+          "field": { "type": "string" },
+          "class": { "enum": ["deterministic", "bounded", "prose"] },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "guardrails": {
+      "type": "array",
+      "description": "In-code protections this contract asserts still exist. A band defined in code stays the single source of truth; the contract asserts nobody deleted it.",
+      "items": {
+        "type": "object",
+        "required": ["name", "asserts"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Referenced by tolerance.bandSource." },
+          "symbol": { "type": "string" },
+          "file": { "type": "string" },
+          "mustExist": { "type": "boolean", "default": true },
+          "asserts": { "type": "string", "minLength": 1, "description": "What this code guarantees, in plain language. Whoever hits the failure needs to know what they just lost." }
+        }
+      }
+    },
+    "externalBoundary": {
+      "type": "array",
+      "description": "Fields whose real logic lives behind a network call or in another service. A contract that cannot be verified must declare that rather than imply coverage.",
+      "items": {
+        "type": "object",
+        "required": ["field", "kind", "describes"],
+        "additionalProperties": false,
+        "properties": {
+          "field": { "type": "string" },
+          "kind": { "enum": ["network", "service", "vendorSdk", "database", "queue"] },
+          "verifiable": { "type": "boolean", "default": false },
+          "describes": { "type": "string", "minLength": 1 },
+          "compensating": { "type": "string", "description": "The out-of-band check that does cover it, and how stale it may get." }
+        }
+      }
+    },
+    "sampler": {
+      "type": "object",
+      "description": "How to produce samples for bounded fields. contracts.sh never runs this; CI does.",
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string" },
+        "produces": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": ["autoApply"],
+      "additionalProperties": false,
+      "properties": {
+        "autoApply": {
+          "enum": ["never", "withApproval", "allowed"],
+          "description": "never means a change touching this contract is never applied unattended, whatever its class. It does not block the work; it blocks the work happening silently."
+        },
+        "onDriftUnresolved": {
+          "enum": ["blockProject", "blockContract"],
+          "default": "blockProject",
+          "description": "An unresolved field means the contracts no longer describe the code, so the default blocks the project."
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": { "type": "string", "description": "file:line" },
+          "signal": { "type": "string" }
+        }
+      }
+    },
+    "confirmedBy": { "type": "string" },
+    "confirmedAt": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "proposed" } }, "required": ["status"] },
+      "then": { "properties": { "policy": { "properties": { "autoApply": { "const": "never" } } } } }
+    },
+    {
+      "anyOf": [
+        { "properties": { "protected": { "minItems": 1 } }, "required": ["protected"] },
+        { "properties": { "externalBoundary": { "minItems": 1 } }, "required": ["externalBoundary"] }
+      ]
+    }
+  ]
+}

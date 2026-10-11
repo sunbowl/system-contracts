@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "name": "quote-total",
+  "status": "confirmed",
+  "why": "totalCents is the number printed on the customer's estimate and invoiced against. If it inflates or deflates, the next conversation is a billing dispute, and the customer is right. Nothing else in this repo carries that consequence.",
+  "owner": "billing",
+  "governs": {
+    "paths": ["src/quote/**"],
+    "entrypoints": ["buildQuote", "POST /quotes"]
+  },
+  "protected": [
+    {
+      "field": "quote.totalCents",
+      "locator": "src/quote/types.ts",
+      "type": "money",
+      "class": "bounded",
+      "tolerance": {
+        "samples": 7,
+        "bandSource": "clamp-to-band",
+        "meanDriftPct": 1.0
+      }
+    },
+    {
+      "field": "quote.quoteId",
+      "locator": "src/quote/types.ts",
+      "type": "identifier",
+      "class": "deterministic",
+      "assertOn": "shape",
+      "shape": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    {
+      "field": "quote.confidenceScore",
+      "locator": "src/quote/types.ts",
+      "type": "quantity",
+      "class": "bounded",
+      "tolerance": {
+        "samples": 7,
+        "band": { "min": 0, "max": 1 },
+        "meanDriftPct": 15.0
+      }
+    }
+  ],
+  "tolerant": [
+    {
+      "field": "quote.reasoning",
+      "class": "prose",
+      "note": "Model-written explanation shown to the customer. Wording, length and tone may change freely; terser is an improvement. Reported in the PR, never a failure."
+    }
+  ],
+  "guardrails": [
+    {
+      "name": "clamp-to-band",
+      "symbol": "clampToBand",
+      "file": "src/quote/clamp.ts",
+      "mustExist": true,
+      "asserts": "The model-produced amount is pinned into the band for the requested scope before it becomes totalCents, and a clamp event is logged whenever it had to move. This is what makes a non-deterministic number safe to protect: the mechanism varies, the band does not, and the deviation is reported."
+    },
+    {
+      "name": "scope-bands",
+      "symbol": "bandForScope",
+      "file": "src/quote/bands.ts",
+      "mustExist": true,
+      "asserts": "The per-scope minimum and maximum the total may take. Widening a band here moves what the customer can be charged without any protected field appearing in the diff, so this file is listed as a guardrail: a change to it is C3 on those grounds alone."
+    }
+  ],
+  "externalBoundary": [],
+  "sampler": {
+    "command": "npm run --silent contract:sample -- quote-total",
+    "produces": "one JSON object per line: {\"field\": \"quote.totalCents\", \"value\": 184500}",
+    "note": "Nothing in contracts.sh runs this. Running repo code from a validator is a separate trust decision; CI runs it, the validator only checks that it is declared."
+  },
+  "policy": {
+    "autoApply": "never",
+    "onDriftUnresolved": "blockProject"
+  },
+  "confirmedBy": "billing",
+  "confirmedAt": "2025-10-11"
+}

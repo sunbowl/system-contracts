@@ -1,6 +1,6 @@
 ---
 name: system-contracts
-description: Field-level contracts declaring what must not change in a codebase, plus a validator that enforces them, so automated changes can be classified instead of blanket-forbidden. Use when deciding whether a change is safe to apply, merge or auto-commit, and when the answer has to be defensible. Activates on "is this safe to change", "will this break anything", "is this a breaking change", "can we auto-apply this", "behaviour change", "equivalence test", "what must not change", "protected field", "contract", ".contracts/", "classify this change", "C3", "drift", "fail open", "blast radius", "output surface", "onboard a legacy codebase", "what is an agent allowed to change here", "why did the pipeline block this". Also use before letting any automated system commit to a repo, when a protected value is produced non-deterministically (an LLM call, randomness, time, a network read), and when a change touches money, quantities, identifiers, API response shapes or persisted schemas.
+description: Field-level contracts declaring what must not change in a codebase, plus a validator that enforces them, so automated changes can be classified instead of blanket-forbidden. Use when deciding whether a change is safe to apply, merge or auto-commit, and when the answer has to be defensible. Activates on "establish rules", "establish contracts", "protect decisions", "learn this project", "learn this project and conditions", "is this safe to change", "will this break anything", "is this a breaking change", "can we auto-apply this", "behaviour change", "equivalence test", "what must not change", "protected field", "contract", ".contracts/", "classify this change", "C3", "drift", "fail open", "blast radius", "output surface", "onboard a legacy codebase", "what is an agent allowed to change here", "why did the pipeline block this". Also use before letting any automated system commit to a repo, when a protected value is produced non-deterministically (an LLM call, randomness, time, a network read), and when a change touches money, quantities, identifiers, API response shapes or persisted schemas.
 ---
 
 # System Contracts
@@ -170,6 +170,38 @@ that the surface is undeclared and therefore C3.
 For each draft a human does four things: read the cited evidence, write the `why` or delete
 the draft, fix the class (anything downstream of a non-deterministic source is `bounded`),
 then set `status` to `confirmed` and move it into `.contracts/`.
+
+## Learn this project (with Necro)
+
+"Learn this project" (and "learn this project and conditions") starts **both** skills on the
+same pass: Necro learns what the code *is*, this skill learns what it *must keep doing*. Run
+them in this order, because Necro's map tells discovery where the live code is and which
+folders to ignore:
+
+1. **Necro.** If `.necro/` is missing, run `necro init`; then `necro inventory` and
+   `necro arch`, and read `ARCHITECTURE.md`. Discovery skips everything under `deprecated/`
+   and anything Necro flags as a zombie — a contract on dead code protects nothing.
+2. **Contracts.** If `.contracts/` is missing, run `contracts.sh init`. Then
+   `contracts.sh discover`, `contracts.sh validate` (when any contract is live) and
+   `contracts.sh status`.
+3. Read the drafts in `.contracts/proposed/` against their cited evidence. Do not confirm any
+   of them — confirmation is a human decision.
+4. **Finish with the contracts TLDR**, and nothing after it:
+
+```
+## Contracts TLDR — <project>
+Auto-apply: PERMITTED | BLOCKED — <one-line reason from status>
+Protected (live): <n> contracts · <n> fields   (or "none — every change here is C3")
+Proposed, awaiting your sign-off: <n>
+  - <field> — <C-class / determinism> — <file:line> — <one-line why it matters>
+  (money, quantities, identifiers and response shapes first; at most 8, then "+N more")
+Drift: <none | fields that no longer resolve>
+Next: <the single decision the user has to make, e.g. "confirm or delete the 3 billing drafts">
+```
+
+"Establish rules", "establish contracts" and "protect decisions" mean the same flow from
+step 2: turn a decision the user has just made, or the evidence in the code, into a draft
+contract with its `why` written down, then end with the same TLDR.
 
 ## Amendment, in both directions
 

@@ -19,6 +19,12 @@
 # MIT licensed. https://github.com/sunbowl/system-contracts
 
 set -eu
+# No pathname expansion, anywhere. Globs from project.json zones and governs.paths are data
+# for glob_to_re, and they reach `for g in $(...)` loops unquoted. With globbing on, the
+# shell expands "src/**" against the files in the working directory before the matcher
+# sees it: a zone stops matching nested files (every change reads as C3), and a contract's
+# governs.paths stops covering nested files (a governed file reads as uncovered).
+set -f
 # pipefail where available (bash 3.2 has it; POSIX sh may not)
 ( set -o pipefail ) 2>/dev/null && set -o pipefail
 
